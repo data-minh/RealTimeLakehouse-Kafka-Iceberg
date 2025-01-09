@@ -17,7 +17,7 @@ table_env = StreamTableEnvironment.create(stream_execution_environment=env,
 
 def get_container_ip(container_name):
     try:
-        # Dùng hàm gethostbyname để tra cứu IP dựa trên tên container
+        # Use gethostbyname to find IP on container
         ip_address = socket.gethostbyname(container_name)
         return ip_address
     except socket.error as e:
