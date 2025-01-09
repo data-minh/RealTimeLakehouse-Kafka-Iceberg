@@ -1,0 +1,252 @@
+version: "3"
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:6.1.1
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      - iceberg-nessie-flink-net
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    
+  broker:
+    image: confluentinc/cp-kafka:6.1.1
+    hostname: broker
+    container_name: broker
+    depends_on:
+      - zookeeper
+      - postgres
+    networks:
+      - iceberg-nessie-flink-net
+    ports:
+      - "29092:29092"
+      - "9092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    hostname: postgres
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    command: [ 'postgres', '-c', 'wal_level=logical' ]
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - iceberg-nessie-flink-net
+
+  debezium:
+    image: debezium/connect:3.0.0.Final
+    container_name: debezium
+    hostname: debezium
+    ports:
+      - '8083:8083'
+    environment:
+      BOOTSTRAP_SERVERS: broker:29092
+      CONNECT_REST_ADVERTISED_HOST_NAME: debezium
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: connect_configs
+      STATUS_STORAGE_TOPIC: connect_statuses
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      ENABLE_DEBEZIUM_SCRIPTING: 'true'
+    depends_on:
+      - broker
+    networks:
+      - iceberg-nessie-flink-net
+
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 9090:8080
+    depends_on:
+      - broker
+      - zookeeper
+    environment:
+      DYNAMIC_CONFIG_ENABLED: 'true'
+      KAFKA_CLUSTERS_0_NAME: minh_data
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: broker:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: debezium
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://debezium:8083
+    networks:
+      - iceberg-nessie-flink-net
+
+  # Flink Job Manager
+  flink-jobmanager:
+    image: minhdata/kafka-flink-nessie-iceberg-python:1.16.1
+    ports:
+      - "8081:8081"
+    depends_on:
+      - debezium
+    command: >
+      /bin/sh -c "
+      ./bin/jobmanager.sh start-foreground &
+      echo 'Waiting for Job Manager...';
+      until curl -s http://localhost:8081 > /dev/null; do
+        echo 'Job Manager not ready, retrying...';
+        sleep 5;
+      done;
+      echo 'Submitting job...';
+      flink run -py /opt/flink/code/cdc.py;
+      tail -f /dev/null;"
+    networks:
+      - iceberg-nessie-flink-net
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+      - S3_ENDPOINT=http://storage:9000 
+      - S3_PATH_STYLE_ACCESS=true
+    volumes:
+      - ./code:/opt/flink/code
+
+  # Flink Task Manager
+  flink-taskmanager:
+    image: minhdata/kafka-flink-nessie-iceberg-python:1.16.1
+    depends_on:
+      - flink-jobmanager
+    command: taskmanager
+    networks:
+      - iceberg-nessie-flink-net
+    scale: 1
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 2
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+      - S3_ENDPOINT=http://storage:9000 
+      - S3_PATH_STYLE_ACCESS=true
+
+  trino:
+    image: trinodb/trino
+    container_name: trino
+    networks:
+      - iceberg-nessie-flink-net
+    ports:
+      - 8080:8080
+    volumes:
+      - "./example.properties:/etc/trino/catalog/example.properties"
+
+  catalog:
+    image: projectnessie/nessie
+    container_name: catalog
+    networks:
+      - iceberg-nessie-flink-net
+    ports:
+      - 19120:19120
+    volumes:
+      - nessie-data:/var/lib/nessie
+
+  storage:
+    image: minio/minio
+    container_name: storage
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+      - MINIO_DOMAIN=localhost
+      - MINIO_REGION_NAME=us-east-1
+      - MINIO_REGION=us-east-1
+    networks:
+      - iceberg-nessie-flink-net
+    ports:
+      - 9001:9001
+      - 9000:9000
+    command: ["server", "/data", "--console-address", ":9001"]
+    volumes:
+      - minio-data:/data
+
+  # Minio Client Container
+  mc:
+    depends_on:
+      - storage
+    image: minio/mc
+    container_name: mc
+    networks:
+      - iceberg-nessie-flink-net
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc config host add minio http://storage:9000 admin password) do echo '...waiting...' && sleep 1; done;
+      if ! (/usr/bin/mc ls minio/warehouse); then /usr/bin/mc mb minio/warehouse; fi;
+      /usr/bin/mc policy set public minio/warehouse;
+      tail -f /dev/null
+      "
+
+  api-helper:
+    image: curlimages/curl:latest
+    container_name: api-helper
+    depends_on:
+      - debezium
+    networks:
+      - iceberg-nessie-flink-net
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for Debezium REST API...';
+      until curl -s http://debezium:8083/connectors > /dev/null; do
+          echo 'Debezium REST API not ready, retrying in 5 seconds...' && sleep 5;
+      done;
+      echo 'Debezium REST API is ready. Sending connector configuration...';
+      curl -X POST -H 'Content-Type: application/json' -d '{
+          \"name\": \"postgres-connector\",
+          \"config\": {
+              \"connector.class\": \"io.debezium.connector.postgresql.PostgresConnector\",
+              \"plugin.name\": \"pgoutput\",
+              \"database.hostname\": \"postgres\",
+              \"database.port\": \"5432\",
+              \"database.user\": \"postgres\",
+              \"database.password\": \"postgres\",
+              \"database.dbname\": \"postgres\",
+              \"database.server.name\": \"postgres\",
+              \"table.include.list\": \"public.demo\",
+              \"topic.prefix\": \"cdc\",
+              \"value.converter\": \"org.apache.kafka.connect.json.JsonConverter\",
+              \"value.converter.schemas.enable\": \"false\"
+          }
+      }' http://debezium:8083/connectors;
+      echo 'Connector configuration sent successfully. Stopping...';
+      exit 0;"
+
+networks:
+  iceberg-nessie-flink-net:
+    driver: bridge
+
+volumes:
+  nessie-data:
+  minio-data:
+  zookeeper_data:
+  kafka_data:
