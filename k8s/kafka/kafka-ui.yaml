@@ -19,6 +19,8 @@ spec:
         ports:
         - containerPort: 8080
         env:
+        - name: DYNAMIC_CONFIG_ENABLED
+          value: "true"
         - name: KAFKA_CLUSTERS_0_NAME
           value: "local"
         - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
@@ -27,10 +29,10 @@ spec:
           value: "zookeeper:2181"
         - name: KAFKA_CLUSTERS_0_METRICS_PORT
           value: "9101"
-        # - name: KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME
-        #   value: first
-        # - name: KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS
-        #   value: "http://connect-debezium:8083"
+        - name: KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME
+          value: "connect-debezium"
+        - name: KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS
+          value: "http://connect-debezium:8083"
         # - name: KAFKA_CLUSTERS_0_SCHEMAREGISTRY
         #   value: "http://schema-registry:8081"
 ---

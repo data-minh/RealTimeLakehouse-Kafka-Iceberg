@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: connect-debezium
+  namespace: nm-kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: connect-debezium
+  template:
+    metadata:
+      labels:
+        app: connect-debezium
+    spec:
+      containers:
+      - name: connect-debezium
+        image: minh333/kafka-connector:0.0.6
+        ports:
+        - containerPort: 8083
+        env:
+        - name: BOOTSTRAP_SERVERS
+          value: "broker-incluster:29092"
+        - name: CONNECT_REST_ADVERTISED_HOST_NAME
+          value: "debezium"
+        - name: GROUP_ID
+          value: "1"
+        - name: CONFIG_STORAGE_TOPIC
+          value: "connect_configs"
+        - name: STATUS_STORAGE_TOPIC
+          value: "connect_statuses"
+        - name: OFFSET_STORAGE_TOPIC
+          value: "connect_offsets"
+        - name: KEY_CONVERTER
+          value: "org.apache.kafka.connect.json.JsonConverter"
+        - name: VALUE_CONVERTER
+          value: "org.apache.kafka.connect.json.JsonConverter"
+        # - name: KEY_CONVERTER
+        #   value: "io.confluent.connect.avro.AvroConverter"
+        # - name: VALUE_CONVERTER
+        #   value: "io.confluent.connect.avro.AvroConverter"
+        # - name: CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL
+        #   value: "http://schema-registry:8081"
+        # - name: CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL
+        #   value: "http://schema-registry:8081"
+        - name: ENABLE_DEBEZIUM_SCRIPTING
+          value: "true"
+        volumeMounts:
+          - mountPath: /kafka/data
+            name: connect-debezium-data
+  volumeClaimTemplates:
+    - metadata:
+        name: connect-debezium-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
+        storageClassName: worker02-nfs-storageclass
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: connect-debezium
+  namespace: nm-kafka
+spec:
+  ports:
+    - port: 8083
+      targetPort: 8083
+  selector:
+    app: connect-debezium
+  type: NodePort
+

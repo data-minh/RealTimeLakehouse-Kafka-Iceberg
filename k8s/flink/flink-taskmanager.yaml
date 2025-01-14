@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flink-taskmanager
+  namespace: nm-kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flink
+      component: taskmanager
+  template:
+    metadata:
+      labels:
+        app: flink
+        component: taskmanager
+    spec:
+      containers:
+      - name: taskmanager
+        image: minhdata/kafka-flink-nessie-iceberg-python:1.16.1
+        args: ["taskmanager"]
+        ports:
+        - containerPort: 6122
+          name: rpc
+        livenessProbe:
+          tcpSocket:
+            port: 6122
+          initialDelaySeconds: 30
+          periodSeconds: 60
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          value: "huonganh"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "huonganh"
+        - name: AWS_REGION
+          value: "us-east-1"
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-1"
+        - name: S3_ENDPOINT
+          value: "http://minio-service.anhtq-minio.svc.cluster.local:9000"
+        - name: S3_PATH_STYLE_ACCESS
+          value: "true"
+        volumeMounts:
+        - name: flink-config-volume
+          mountPath: /opt/flink/conf
+        - name: flink-code
+          mountPath: /opt/flink/code
+        securityContext:
+          runAsUser: 9999  # refers to user _flink_ from official flink image, change if necessary
+      - name: git-sync
+        image: minh333/git-sync-airflow:latest
+        env:
+          - name: REPO_URL
+            value: "https://github.com/data-minh/demo-airflow.git"
+          - name: GIT_BRANCH
+            value: "main"
+          - name: DIRECTORY_NAME
+            value: "project"
+          - name: DESTINATION_PATH
+            value: "/opt/flink/code"
+          - name: INTERVAL
+            value: "30"
+        volumeMounts:
+        - name: flink-code
+          mountPath: /opt/flink/code
+      volumes:
+      - name: flink-config-volume
+        configMap:
+          name: flink-config
+          items:
+          - key: flink-conf.yaml
+            path: flink-conf.yaml
+          - key: log4j-console.properties
+            path: log4j-console.properties
+      - name: flink-code
+        emptyDir: {}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: flink-taskmanager
+  namespace: nm-kafka
+  labels:
+    app: flink
+    component: taskmanager
+spec:
+  ports:
+    - port: 6122
+      targetPort: 6122
+      name: rpc
+  selector:
+    app: flink
+    component: taskmanager
+  type: ClusterIP
