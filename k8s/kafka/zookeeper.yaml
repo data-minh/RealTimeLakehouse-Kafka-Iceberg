@@ -6,10 +6,10 @@ metadata:
 spec:
   resources:
     requests:
-      storage: 2Gi 
+      storage: 4Gi 
   accessModes:
     - ReadWriteOnce
-  storageClassName: worker02-nfs-storageclass
+  storageClassName: hdd-storageclass
 
 ---
 

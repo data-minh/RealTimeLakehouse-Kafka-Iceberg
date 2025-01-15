@@ -56,8 +56,8 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
-            storage: 2Gi
-        storageClassName: worker02-nfs-storageclass
+            storage: 4Gi
+        storageClassName: hdd-storageclass
 
 ---
 apiVersion: v1

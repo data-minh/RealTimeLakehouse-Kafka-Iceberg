@@ -93,7 +93,7 @@ spec:
         resources:
           requests:
             storage: 5Gi
-        storageClassName: worker02-nfs-storageclass
+        storageClassName: hdd-storageclass
 
 ---
 apiVersion: v1
