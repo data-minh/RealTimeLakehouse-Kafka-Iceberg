@@ -45,6 +45,8 @@ spec:
   selector:
     app: kafka-ui
   ports:
-    - port: 8080
+    - name: kafka-ui
+      port: 8080
       targetPort: 8080
+      nodePort: 30800
   type: NodePort

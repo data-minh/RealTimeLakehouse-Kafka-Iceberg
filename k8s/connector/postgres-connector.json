@@ -12,7 +12,8 @@
         "table.include.list": "public.demo",
         "topic.prefix": "cdc",
         "value.converter": "org.apache.kafka.connect.json.JsonConverter",
-        "value.converter.schemas.enable": "false"
+        "value.converter.schemas.enable": "false",
+        "slot.name": "debezium_slot"
     }
 }
 
