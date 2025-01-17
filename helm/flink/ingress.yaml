@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: advanced-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: flink.k8s.io
+    http:
+      paths:
+      - path: /default/advanced-ingress(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: flink-session-cluster-rest
+            port:
+              number: 8081

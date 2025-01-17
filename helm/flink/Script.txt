@@ -1,0 +1,10 @@
+# Create Cert Flink Kubernetes Operator
+kubectl create -f https://github.com/jetstack/cert-manager/releases/download/v1.8.2/cert-manager.yaml -n nm-kafka
+
+helm repo add flink-operator-repo https://downloads.apache.org/flink/flink-kubernetes-operator-1.10.0/
+
+helm install flink-kubernetes-operator flink-operator-repo/flink-kubernetes-operator --namespace nm-kafka
+
+kubectl create -f https://raw.githubusercontent.com/apache/flink-kubernetes-operator/release-1.10/examples/basic.yaml -n nm-flink
+
+kubectl port-forward svc/basic-example-rest 8081 -n nm-flink

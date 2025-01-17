@@ -1,0 +1,20 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: flink-session-cluster
+spec:
+  image: flink:1.17
+  flinkVersion: v1_17
+  mode: standalone # native
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: "2"
+  serviceAccount: flink 
+  jobManager:
+    resource:
+      memory: "1024m"  
+      cpu: 1        
+  taskManager:
+    resource:
+      memory: "1024m"  
+      cpu: 1         
+    replicas: 2        
