@@ -24,18 +24,18 @@ spec:
   image: flink:1.17
   flinkVersion: v1_17
   ingress:
-    template: "{{name}}.{{namespace}}.flink.k8s.io"
+    template: "flink.pnm.com"
   flinkConfiguration:
     taskmanager.numberOfTaskSlots: "2"
   serviceAccount: flink
   jobManager:
     resource:
-      memory: "2048m"
-      cpu: 1
+      memory: "1024m"
+      cpu: 0.5
   taskManager:
     resource:
-      memory: "2048m"
-      cpu: 1
+      memory: "1024m"
+      cpu: 0.5
   job:
     jarURI: local:///opt/flink/examples/streaming/StateMachineExample.jar
     parallelism: 2

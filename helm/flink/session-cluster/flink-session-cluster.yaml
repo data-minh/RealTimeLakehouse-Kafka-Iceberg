@@ -3,16 +3,16 @@ kind: FlinkDeployment
 metadata:
   name: flink-session-cluster
 spec:
-  image: flink:1.17
-  flinkVersion: v1_17
+  image: minhdata/kafka-flink-nessie-iceberg-python:1.16.1
+  flinkVersion: v1_16
   mode: standalone # native
   flinkConfiguration:
-    taskmanager.numberOfTaskSlots: "2"
+    taskmanager.numberOfTaskSlots: "4"
   serviceAccount: flink 
   jobManager:
     resource:
       memory: "1024m"  
-      cpu: 1        
+      cpu: 1       
   taskManager:
     resource:
       memory: "1024m"  
